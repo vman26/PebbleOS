@@ -80,7 +80,8 @@ uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_
                                                            uint16_t bpm, uint32_t elapsed_s) {
   // Keep estimates in a plausible cycling range. We bias early session speed higher and let it
   // settle as the session progresses.
-  // Bounds model casual/commuter rides: roughly 7.2 km/h to 31.2 km/h.
+  // Bounds model casual/commuter rides: roughly 7.2 km/h to 31.2 km/h. The floor avoids unreal
+  // near-zero speeds during brief noise dips, while the ceiling suppresses implausible spikes.
   const uint32_t k_min_speed_mm_per_min = 120 * MM_PER_METER;  // 7.2 km/h
   const uint32_t k_max_speed_mm_per_min = 520 * MM_PER_METER;  // 31.2 km/h
   // Base speed anchored near a relaxed rollout before motion/HR adjustments.
@@ -91,7 +92,8 @@ uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_
   // Motion intensity bonus from VMC.
   const uint32_t k_vmc_cap = 800;
   const uint32_t vmc_capped = MIN(vmc, k_vmc_cap);
-  // Empirical scale from motion intensity to speed contribution: 0.18 m/min per VMC unit.
+  // Empirical scale from motion intensity to speed contribution: 0.18 m/min per VMC unit, tuned
+  // so typical VMC ranges stay inside realistic bike speeds while still reacting to effort shifts.
   speed_mm_per_min += vmc_capped * 180;
 
   // Cycling generally has fewer steps than running; penalize high step cadence.

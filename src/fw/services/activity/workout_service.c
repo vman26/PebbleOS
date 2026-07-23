@@ -155,8 +155,11 @@ static void prv_handle_movement_update(HealthEventMovementUpdateData *event) {
       const uint16_t steps_per_min = MIN((uint32_t)UINT16_MAX,
                                          ROUND((uint64_t)delta_steps * MS_PER_MINUTE, delta_ms));
       const uint16_t bpm = MAX(0, MIN((int32_t)UINT16_MAX, wrkt_data->current_bpm));
+      // Manual workout movement events do not expose VMC directly; use a conservative proxy from
+      // observed cadence so the dynamic estimator still responds to motion changes.
+      const uint16_t vmc_proxy = MIN((uint16_t)800, (uint16_t)(steps_per_min * 16));
       delta_distance_mm = activity_private_compute_cycling_distance_mm(delta_ms,
-                                                                        0 /* vmc */,
+                                                                        vmc_proxy,
                                                                         steps_per_min,
                                                                         bpm,
                                                                         wrkt_data->duration_s);
