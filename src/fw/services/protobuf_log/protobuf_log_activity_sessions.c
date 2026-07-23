@@ -38,6 +38,8 @@ static ActivitySessionType prv_proto_type_to_activity_type(ProtobufLogActivityTy
       return ActivitySessionType_Run;
     case ProtobufLogActivityType_Open:
       return ActivitySessionType_Open;
+    case ProtobufLogActivityType_Cycling:
+      return ActivitySessionType_Cycling;
   }
   WTF;
 }
@@ -63,6 +65,8 @@ static ProtobufLogActivityType prv_activity_type_to_proto_type(ActivitySessionTy
       return ProtobufLogActivityType_Run;
     case ActivitySessionType_Open:
       return ProtobufLogActivityType_Open;
+    case ActivitySessionType_Cycling:
+      return ProtobufLogActivityType_Cycling;
     case ActivitySessionTypeCount:
       break;
   }

@@ -18,6 +18,7 @@ typedef enum {
   WorkoutType_Run,
   WorkoutType_Walk,
   WorkoutType_OpenWorkout,
+  WorkoutType_Cycling,
   WorkoutTypeCount,
 } WorkoutType;
 
@@ -37,6 +38,8 @@ static uint32_t prv_get_icon_resource_id(WorkoutType workout_type) {
       return RESOURCE_ID_WORKOUT_APP_RUN_SMALL;
     case WorkoutType_Walk:
       return RESOURCE_ID_WORKOUT_APP_WALK_SMALL;
+    case WorkoutType_Cycling:
+      return RESOURCE_ID_WORKOUT_APP_RUN_SMALL;
     case WorkoutType_OpenWorkout:
       return RESOURCE_ID_WORKOUT_APP_WORKOUT_SMALL;
     default:
@@ -50,6 +53,8 @@ static ActivitySessionType prv_get_activity_type(WorkoutType workout_type) {
       return ActivitySessionType_Run;
     case WorkoutType_Walk:
       return ActivitySessionType_Walk;
+    case WorkoutType_Cycling:
+      return ActivitySessionType_Cycling;
     case WorkoutType_OpenWorkout:
       return ActivitySessionType_Open;
     default:

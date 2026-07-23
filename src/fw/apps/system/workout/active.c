@@ -1055,6 +1055,29 @@ WorkoutActiveWindow *workout_active_create_for_activity_type(ActivitySessionType
                                                    workout_controller);
       }
     }
+    case ActivitySessionType_Cycling:
+    {
+      if (hrm_is_available) {
+        WorkoutMetricType top_metric = WorkoutMetricType_Hr;
+        WorkoutMetricType scrollable_metrics[] = {WorkoutMetricType_Duration,
+                                                  WorkoutMetricType_Speed,
+                                                  WorkoutMetricType_Distance};
+        return workout_active_create_double_layout(top_metric,
+                                                   ARRAY_LENGTH(scrollable_metrics),
+                                                   scrollable_metrics,
+                                                   workout_data,
+                                                   workout_controller);
+      } else {
+        WorkoutMetricType top_metric = WorkoutMetricType_Duration;
+        WorkoutMetricType scrollable_metrics[] = {WorkoutMetricType_Speed,
+                                                  WorkoutMetricType_Distance};
+        return workout_active_create_double_layout(top_metric,
+                                                   ARRAY_LENGTH(scrollable_metrics),
+                                                   scrollable_metrics,
+                                                   workout_data,
+                                                   workout_controller);
+      }
+    }
     default:
       return NULL;
   }

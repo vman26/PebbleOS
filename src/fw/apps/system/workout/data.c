@@ -5,6 +5,7 @@
 
 #include "pbl/services/activity/health_util.h"
 #include "pbl/services/activity/workout_service.h"
+#include "util/units.h"
 
 #include <stdio.h>
 
@@ -21,6 +22,10 @@ void workout_data_update(void *data) {
   if (workout_data->duration_s && workout_data->distance_m) {
     workout_data->avg_pace = health_util_get_pace(workout_data->duration_s,
                                                   workout_data->distance_m);
+    workout_data->avg_speed_m_per_h = ROUND(workout_data->distance_m * SECONDS_PER_HOUR,
+                                            workout_data->duration_s);
+  } else {
+    workout_data->avg_speed_m_per_h = 0;
   }
 }
 
@@ -55,7 +60,11 @@ void workout_data_fill_metric_value(WorkoutMetricType type, char *buffer, size_t
       break;
     }
     case WorkoutMetricType_Speed:
-      // Not part of the workout service yet
+    {
+      const int conversion_factor = health_util_get_distance_factor();
+      health_util_format_whole_and_decimal(buffer, buffer_size, metric_value, conversion_factor);
+      break;
+    }
     case WorkoutMetricType_Custom:
       // Sports app only
     case WorkoutMetricType_None:
@@ -76,6 +85,8 @@ int32_t workout_data_get_metric_value(WorkoutMetricType type, void *data) {
       return workout_data->avg_pace;
     case WorkoutMetricType_Distance:
       return workout_data->distance_m;
+    case WorkoutMetricType_Speed:
+      return workout_data->avg_speed_m_per_h;
     case WorkoutMetricType_Steps:
       return workout_data->steps;
     default:

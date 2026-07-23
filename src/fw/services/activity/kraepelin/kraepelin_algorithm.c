@@ -34,6 +34,7 @@ Pebble App roject.
 #include "pbl/util/trig.h"
 #include "pbl/services/hrm/hrm_manager_private.h"
 #include "pbl/services/activity/activity.h"
+#include "pbl/services/activity/activity_calculators.h"
 #include <pbl/logging/logging.h>
 #include "system/passert.h"
 #include "pbl/util/math.h"
@@ -360,6 +361,7 @@ typedef struct KAlgState {
   // State for the activity detectors
   KAlgStepActivityState walk_state;
   KAlgStepActivityState run_state;
+  KAlgStepActivityState cycling_state;
   KAlgSleepActivityState sleep_state;
   KAlgDeepSleepActivityState deep_sleep_state;
   KAlgNotWornState not_worn_state;
@@ -401,6 +403,9 @@ static void prv_reset_state(KAlgState *state) {
   }
   if (state->run_state.start_time == KALG_START_TIME_NONE) {
     prv_reset_step_activity_state(&state->run_state);
+  }
+  if (state->cycling_state.start_time == KALG_START_TIME_NONE) {
+    prv_reset_step_activity_state(&state->cycling_state);
   }
   state->sleep_state = (KAlgSleepActivityState){};
   state->deep_sleep_state = (KAlgDeepSleepActivityState){};
@@ -1968,6 +1973,7 @@ static const KAlgActivityAttributes *prv_get_step_activity_attributes(KAlgActivi
     {0, 0},            // KAlgActivityType_ResetfulSleep
     {40,  130},        // KAlgActivityType_Walk
     {130, 255},        // KAlgActivityType_Run
+    {0, 0},            // KAlgActivityType_Cycling
   };
 
   PBL_ASSERTN(activity < KAlgActivityTypeCount);
@@ -2083,6 +2089,69 @@ static void prv_step_activity_update(KAlgState *alg_state, KAlgStepActivityState
 
 
 // ---------------------------------------------------------------------------------------
+static void prv_cycling_activity_update(KAlgState *alg_state, KAlgStepActivityState *state,
+                                        time_t utc_now, uint16_t steps, uint16_t vmc,
+                                        uint32_t resting_calories, uint32_t active_calories,
+                                        bool definitely_not_worn, bool shutting_down,
+                                        KAlgActivitySessionCallback sessions_cb, void *context) {
+  const uint32_t k_max_inactive_minutes = 4;
+  const uint32_t k_min_active_duration_secs = 6 * SECONDS_PER_MINUTE;
+  const uint32_t k_start_debounce_minutes = 3;
+  const uint16_t k_min_vmc = 120;
+  const uint16_t k_max_steps = 25;
+
+  const bool is_active_minute = !definitely_not_worn && (vmc >= k_min_vmc) && (steps <= k_max_steps);
+  const bool activity_in_progress = is_active_minute && !shutting_down;
+
+  if (activity_in_progress) {
+    state->inactive_minute_count = 0;
+    if (state->start_time == KALG_START_TIME_NONE) {
+      state->start_time = utc_now - SECONDS_PER_MINUTE;
+      KALG_LOG_DEBUG("Detected cycling candidate start: %s",
+                     prv_log_time(alg_state, state->start_time));
+    }
+
+    const uint32_t duration_secs = utc_now - state->start_time;
+    const uint32_t minute_distance_mm = activity_private_compute_cycling_distance_mm(
+        MS_PER_MINUTE, vmc, steps, 0 /* bpm */, duration_secs);
+
+    state->steps += steps;
+    state->resting_calories += resting_calories;
+    state->active_calories += active_calories;
+    state->distance_mm += minute_distance_mm;
+
+    if (duration_secs >= k_min_active_duration_secs &&
+        (duration_secs / SECONDS_PER_MINUTE) >= k_start_debounce_minutes) {
+      sessions_cb(context, KAlgActivityType_Cycling, state->start_time, duration_secs,
+                  true /* ongoing */, false /* delete */, state->steps, state->resting_calories,
+                  state->active_calories, state->distance_mm);
+    }
+  } else {
+    if (state->start_time == KALG_START_TIME_NONE) {
+      return;
+    }
+
+    const bool activity_ended = shutting_down
+        ? true
+        : (state->inactive_minute_count++ > (int)k_max_inactive_minutes);
+    if (!activity_ended) {
+      return;
+    }
+
+    int32_t duration_secs = (utc_now - state->start_time)
+                            - (state->inactive_minute_count * SECONDS_PER_MINUTE);
+    duration_secs = MAX(0, duration_secs);
+    if (duration_secs >= k_min_active_duration_secs) {
+      sessions_cb(context, KAlgActivityType_Cycling, state->start_time, (uint32_t)duration_secs,
+                  false /* ongoing */, false /* delete */, state->steps, state->resting_calories,
+                  state->active_calories, state->distance_mm);
+    }
+    prv_reset_step_activity_state(state);
+  }
+}
+
+
+// ---------------------------------------------------------------------------------------
 // Feed new minute data into the activity detection state machine. This logic looks for non-sleep
 // activities, like walks, runs, etc.
 void kalg_activities_update(KAlgState *state, time_t utc_now, uint16_t steps, uint16_t vmc,
@@ -2111,6 +2180,11 @@ void kalg_activities_update(KAlgState *state, time_t utc_now, uint16_t steps, ui
                              active_calories, distance_mm, shutting_down, sessions_cb, context,
                              KAlgActivityType_Run);
 
+    // Pass onto the cycling activity detector.
+    prv_cycling_activity_update(state, &state->cycling_state, utc_now, steps, vmc,
+                                resting_calories, active_calories, definitely_not_worn,
+                                shutting_down, sessions_cb, context);
+
     // Pass onto the sleep detector
     prv_sleep_activity_update(state, utc_now, vmc, orientation, definitely_not_worn,
                               shutting_down, sessions_cb, context);
@@ -2127,6 +2201,7 @@ time_t kalg_activity_last_processed_time(KAlgState *state, KAlgActivityType acti
       break;
     case KAlgActivityType_Run:
     case KAlgActivityType_Walk:
+    case KAlgActivityType_Cycling:
       return state->last_activity_update_utc;
     case KAlgActivityTypeCount:
       break;

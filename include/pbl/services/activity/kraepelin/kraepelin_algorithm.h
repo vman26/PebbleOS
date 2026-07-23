@@ -46,6 +46,9 @@ typedef enum {
   // A run
   KAlgActivityType_Run,
 
+  // A cycling workout
+  KAlgActivityType_Cycling,
+
   // Leave at end
   KAlgActivityTypeCount,
 } KAlgActivityType;

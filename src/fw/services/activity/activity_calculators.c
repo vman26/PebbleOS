@@ -75,6 +75,56 @@ uint32_t activity_private_compute_distance_mm(uint32_t steps, uint32_t ms) {
   return distance_mm;
 }
 
+// ------------------------------------------------------------------------------------------------
+uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_t steps_per_min,
+                                                           uint16_t bpm, uint32_t elapsed_s) {
+  // Keep estimates in a plausible cycling range. We bias early session speed higher and let it
+  // settle as the session progresses.
+  const uint32_t k_min_speed_mm_per_min = 120 * MM_PER_METER;  // 7.2 km/h
+  const uint32_t k_max_speed_mm_per_min = 520 * MM_PER_METER;  // 31.2 km/h
+  const uint32_t k_base_speed_mm_per_min = 170 * MM_PER_METER; // 10.2 km/h
+
+  uint32_t speed_mm_per_min = k_base_speed_mm_per_min;
+
+  // Motion intensity bonus from VMC.
+  const uint32_t k_vmc_cap = 800;
+  const uint32_t vmc_capped = MIN(vmc, k_vmc_cap);
+  speed_mm_per_min += vmc_capped * 180;
+
+  // Cycling generally has fewer steps than running; penalize high step cadence.
+  if (steps_per_min > 80) {
+    const uint32_t excess_steps = steps_per_min - 80;
+    speed_mm_per_min = MAX((int32_t)k_min_speed_mm_per_min,
+                           (int32_t)speed_mm_per_min - (int32_t)(excess_steps * 1200));
+  }
+
+  // Heart rate can inform effort when available.
+  if (bpm > 95) {
+    speed_mm_per_min += MIN((uint32_t)(bpm - 95) * 900, (uint32_t)60 * MM_PER_METER);
+  }
+
+  // Start fast then decay over ~10 minutes.
+  const uint32_t elapsed_min = elapsed_s / SECONDS_PER_MINUTE;
+  if (elapsed_min < 10) {
+    speed_mm_per_min += (10 - elapsed_min) * 6 * MM_PER_METER;
+  }
+
+  return CLIP(speed_mm_per_min, k_min_speed_mm_per_min, k_max_speed_mm_per_min);
+}
+
+// ------------------------------------------------------------------------------------------------
+uint32_t activity_private_compute_cycling_distance_mm(uint32_t ms, uint16_t vmc,
+                                                      uint16_t steps_per_min, uint16_t bpm,
+                                                      uint32_t elapsed_s) {
+  if (ms == 0) {
+    return 0;
+  }
+
+  const uint64_t speed_mm_per_min =
+      activity_private_compute_cycling_speed_mm_per_min(vmc, steps_per_min, bpm, elapsed_s);
+  return ROUND(speed_mm_per_min * ms, (uint64_t)SECONDS_PER_MINUTE * MS_PER_SECOND);
+}
+
 
 // ------------------------------------------------------------------------------------------------
 // Compute active calories (in calories, not kcalories) covered by going the given distance in

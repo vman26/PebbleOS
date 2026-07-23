@@ -1614,6 +1614,20 @@ static const char* prv_get_intro_str_for_activity(ActivitySession *session) {
       return prv_get_variant(&s_open_intros, VARIANT_RANDOM);
     }
 
+    case ActivitySessionType_Cycling: {
+      static const InsightCopyVariants s_cycling_intros = {
+        .num_variants = 5,
+        .variants = {
+          i18n_noop("You crushed that ride!"),
+          i18n_noop("Spin strong, finish stronger 🚴"),
+          i18n_noop("Wheels up! Nice effort 👊"),
+          i18n_noop("Strong ride, strong heart 💪"),
+          i18n_noop("Way to keep the pedals turning!"),
+        },
+      };
+      return prv_get_variant(&s_cycling_intros, VARIANT_RANDOM);
+    }
+
     default: {
       break;
     }
@@ -1647,6 +1661,8 @@ static void prv_add_metric_duration_info(StringList *headings, int headings_buf_
     activity_label = i18n_get("Run", headings);
   } else if (session->type == ActivitySessionType_Walk) {
     activity_label = i18n_get("Walk", headings);
+  } else if (session->type == ActivitySessionType_Cycling) {
+    activity_label = i18n_get("Cycle", headings);
   } else {
     activity_label = i18n_get("Workout", headings);
   }
@@ -1805,6 +1821,16 @@ void activity_insights_push_activity_session_notification(time_t notif_time,
     prv_add_metric_duration_info(headings, headings_buf_size, values, values_buf_size, session);
     prv_add_hr_metric_info(headings, headings_buf_size, values, values_buf_size,
                            avg_hr, hr_zone_time_s);
+  } else if (session->type == ActivitySessionType_Cycling) {
+    type = ActivityInsightType_ActivitySessionCycling;
+    icon = TIMELINE_RESOURCE_ACTIVITY;
+
+    prv_add_metric_duration_info(headings, headings_buf_size, values, values_buf_size, session);
+    prv_add_distance_metric_info(headings, headings_buf_size, values, values_buf_size, session);
+    prv_add_active_calories_metric_info(headings, headings_buf_size,
+                                        values, values_buf_size, session);
+    prv_add_hr_metric_info(headings, headings_buf_size, values, values_buf_size,
+                           avg_hr, hr_zone_time_s);
   } else {
     // Unsupported activity type
     goto cleanup;
@@ -1903,6 +1929,7 @@ void prv_process_activity_sessions(time_t now_utc) {
           break;
         case ActivitySessionType_Walk:
         case ActivitySessionType_Run:
+        case ActivitySessionType_Cycling:
           prv_do_activity_session(now_utc, &sessions[i]);
           break;
         default:

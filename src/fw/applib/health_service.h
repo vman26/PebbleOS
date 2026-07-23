@@ -221,10 +221,12 @@ typedef enum {
   HealthActivityRun = 1 << 3,
   //! The 'generic' activity.
   HealthActivityOpenWorkout = 1 << 4,
+  //! The 'cycling' activity.
+  HealthActivityCycling = 1 << 5,
 } HealthActivity;
 
 //! A mask value representing all available activities
-#define HealthActivityMaskAll ((HealthActivityOpenWorkout << 1) - 1)
+#define HealthActivityMaskAll ((HealthActivityCycling << 1) - 1)
 
 //! Expresses a set of \ref HealthActivity values as a bitmask.
 typedef uint32_t HealthActivityMask;

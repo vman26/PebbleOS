@@ -1794,6 +1794,9 @@ void test_kraepelin_algorithm__activity_tests(void) {
         case KAlgActivityType_Run:
           desc = "run";
           break;
+        case KAlgActivityType_Cycling:
+          desc = "cycling";
+          break;
         case KAlgActivityTypeCount:
           WTF;
           break;
@@ -2206,5 +2209,4 @@ void test_kraepelin_algorithm__sleep_stats(void) {
   kernel_free(s_kalg_state);
   s_kalg_state = NULL;
 }
-
 

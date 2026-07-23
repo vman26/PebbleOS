@@ -70,6 +70,7 @@ message ActivityType {
     Walk = 5;
     Run = 6;
     Open = 7;
+    Cycling = 8;
     // to be continued
   }
 

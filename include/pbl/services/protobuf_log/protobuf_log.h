@@ -44,6 +44,7 @@ typedef pebble_pipeline_ActivityType_InternalType ProtobufLogActivityType;
 #define ProtobufLogActivityType_Walk        pebble_pipeline_ActivityType_InternalType_Walk
 #define ProtobufLogActivityType_Run         pebble_pipeline_ActivityType_InternalType_Run
 #define ProtobufLogActivityType_Open        pebble_pipeline_ActivityType_InternalType_Open
+#define ProtobufLogActivityType_Cycling     pebble_pipeline_ActivityType_InternalType_Cycling
 
 #define PLOG_MAX_SENDER_ID_LEN  64
 #define PLOG_MAX_SENDER_TYPE_LEN  64

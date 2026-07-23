@@ -798,7 +798,8 @@ T_STATIC bool prv_activity_session_matches(const ActivitySession *session, Healt
     || (session->type == ActivitySessionType_RestfulNap && ((mask & HealthActivityRestfulSleep) > 0))
     || (session->type == ActivitySessionType_Walk && ((mask & HealthActivityWalk) > 0))
     || (session->type == ActivitySessionType_Run && ((mask & HealthActivityRun) > 0))
-    || (session->type == ActivitySessionType_Open && ((mask & HealthActivityOpenWorkout) > 0));
+    || (session->type == ActivitySessionType_Open && ((mask & HealthActivityOpenWorkout) > 0))
+    || (session->type == ActivitySessionType_Cycling && ((mask & HealthActivityCycling) > 0));
   if (!type_matches) {
     return false;
   }
@@ -1324,6 +1325,10 @@ HealthActivityMask health_service_peek_current_activities(void) {
     result |= HealthActivityOpenWorkout;
   }
 
+  if (sys_activity_sessions_is_session_type_ongoing(ActivitySessionType_Cycling)) {
+    result |= HealthActivityCycling;
+  }
+
   return result;
 }
 
@@ -1379,6 +1384,9 @@ void health_service_activities_iterate(HealthActivityMask activity_mask,
           break;
         case ActivitySessionType_Open:
           session_activity = HealthActivityOpenWorkout;
+          break;
+        case ActivitySessionType_Cycling:
+          session_activity = HealthActivityCycling;
           break;
         case ActivitySessionType_None:
         case ActivitySessionTypeCount:

@@ -230,7 +230,12 @@ static void prv_init(void) {
       workout_utils_find_ongoing_activity_session(&data->ongoing_session);
 
   if (found_automatic_session) {
-    prv_show_workout_detected_dialog(data);
+    if (data->ongoing_session.type == ActivitySessionType_Cycling &&
+        workout_service_takeover_activity_session(&data->ongoing_session)) {
+      prv_prep_and_open_active_window(data->ongoing_session.type);
+    } else {
+      prv_show_workout_detected_dialog(data);
+    }
   } else {
     workout_push_summary_window();
   }

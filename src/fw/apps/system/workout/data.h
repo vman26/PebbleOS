@@ -16,6 +16,7 @@ typedef struct WorkoutData {
   int32_t duration_s;
   int32_t distance_m;
   int32_t avg_pace;
+  int32_t avg_speed_m_per_h;
   int32_t bpm;
   HRZone hr_zone;
 } WorkoutData;

@@ -31,6 +31,7 @@ typedef enum ActivityInsightType {
   ActivityInsightType_ActivitySessionWalk,
   ActivityInsightType_ActivitySessionRun,
   ActivityInsightType_ActivitySessionOpen,
+  ActivityInsightType_ActivitySessionCycling,
 } ActivityInsightType;
 
 // Insight response types (for analytics)

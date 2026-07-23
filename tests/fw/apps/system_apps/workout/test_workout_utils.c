@@ -93,4 +93,14 @@ void test_workout_utils__find_ongoing_activity_session(void) {
   // Make sure the function returned true and the returned session is of type run
   cl_assert_equal_b(found_session, true);
   cl_assert_equal_i(run_session.type, ActivitySessionType_Run);
+
+  prv_add_session(&(ActivitySession){
+    .type = ActivitySessionType_Cycling,
+    .ongoing = true,
+  });
+
+  ActivitySession cycling_session = {};
+  found_session = workout_utils_find_ongoing_activity_session(&cycling_session);
+  cl_assert_equal_b(found_session, true);
+  cl_assert_equal_i(cycling_session.type, ActivitySessionType_Cycling);
 }

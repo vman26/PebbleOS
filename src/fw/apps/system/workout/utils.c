@@ -96,6 +96,9 @@ const char* workout_utils_get_name_for_activity(ActivitySessionType type) {
     case ActivitySessionType_Run:
       /// Run Label
       return i18n_noop("Run");
+    case ActivitySessionType_Cycling:
+      /// Cycling Label
+      return i18n_noop("Cycle");
     case ActivitySessionType_Sleep:
     case ActivitySessionType_RestfulSleep:
     case ActivitySessionType_Nap:
@@ -120,6 +123,9 @@ const char* workout_utils_get_detection_text_for_activity(ActivitySessionType ty
     case ActivitySessionType_Run:
       /// Run automatically detected dialog text
       return i18n_noop("Run\nDetected");
+    case ActivitySessionType_Cycling:
+      /// Cycling automatically detected dialog text
+      return i18n_noop("Cycle\nDetected");
     case ActivitySessionType_Sleep:
     case ActivitySessionType_RestfulSleep:
     case ActivitySessionType_Nap:

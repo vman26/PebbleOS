@@ -22,6 +22,7 @@
 #include "util/units.h"
 
 #include <pbl/os/mutex.h>
+#include <stdint.h>
 
 PBL_LOG_MODULE_DECLARE(service_activity, CONFIG_SERVICE_ACTIVITY_LOG_LEVEL);
 
@@ -141,13 +142,24 @@ static void prv_handle_movement_update(HealthEventMovementUpdateData *event) {
   }
 
   if (!workout_service_is_paused()) {
-    // Calculate the step delta
-    const uint32_t delta_steps = new_event_steps - wrkt_data->last_event_step_count;
-    wrkt_data->steps += delta_steps;
-
-    // Calculate the distance delta
     const time_t delta_ms = (now_ts - wrkt_data->last_movement_event_time_ts) * MS_PER_SECOND;
-    const int32_t delta_distance_mm = activity_private_compute_distance_mm(delta_steps, delta_ms);
+    const uint32_t delta_steps = new_event_steps - wrkt_data->last_event_step_count;
+    int32_t delta_distance_mm = 0;
+
+    if (wrkt_data->type == ActivitySessionType_Cycling) {
+      const uint32_t delta_minutes = MAX(1, ROUND(delta_ms, MS_PER_MINUTE));
+      const uint16_t steps_per_min = MIN((uint32_t)UINT16_MAX, ROUND(delta_steps, delta_minutes));
+      const uint16_t bpm = MAX(0, MIN((int32_t)UINT16_MAX, wrkt_data->current_bpm));
+      delta_distance_mm = activity_private_compute_cycling_distance_mm(delta_ms,
+                                                                        0 /* vmc */,
+                                                                        steps_per_min,
+                                                                        bpm,
+                                                                        wrkt_data->duration_s);
+    } else {
+      wrkt_data->steps += delta_steps;
+      delta_distance_mm = activity_private_compute_distance_mm(delta_steps, delta_ms);
+    }
+
     wrkt_data->distance_m += (delta_distance_mm / MM_PER_METER);
 
     // Calculate active calories
@@ -194,6 +206,7 @@ static void prv_handle_heart_rate_update(HealthEventHeartRateUpdateData *event) 
 bool workout_service_is_workout_type_supported(ActivitySessionType type) {
   return type == ActivitySessionType_Walk ||
          type == ActivitySessionType_Run ||
+         type == ActivitySessionType_Cycling ||
          type == ActivitySessionType_Open;
 }
 

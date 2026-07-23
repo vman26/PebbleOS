@@ -115,6 +115,7 @@ bool activity_sessions_prv_is_sleep_activity(ActivitySessionType activity_type) 
     case ActivitySessionType_Walk:
     case ActivitySessionType_Run:
     case ActivitySessionType_Open:
+    case ActivitySessionType_Cycling:
       return false;
     case ActivitySessionType_None:
     case ActivitySessionTypeCount:
@@ -951,5 +952,4 @@ void test_activity_algorithm_kraepelin__minute_data_steps_during_sleep(void) {
     cl_assert_equal_i(retrieve[i].heart_rate_bpm, minute_data[i].heart_rate_bpm);
   }
 }
-
 
