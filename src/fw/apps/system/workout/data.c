@@ -22,7 +22,7 @@ void workout_data_update(void *data) {
   if (workout_data->duration_s && workout_data->distance_m) {
     workout_data->avg_pace = health_util_get_pace(workout_data->duration_s,
                                                   workout_data->distance_m);
-    workout_data->avg_speed_m_per_h = ROUND(workout_data->distance_m * SECONDS_PER_HOUR,
+    workout_data->avg_speed_m_per_h = ROUND((uint64_t)workout_data->distance_m * SECONDS_PER_HOUR,
                                             workout_data->duration_s);
   } else {
     workout_data->avg_speed_m_per_h = 0;

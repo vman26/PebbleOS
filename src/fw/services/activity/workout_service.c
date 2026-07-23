@@ -148,7 +148,7 @@ static void prv_handle_movement_update(HealthEventMovementUpdateData *event) {
 
     if (wrkt_data->type == ActivitySessionType_Cycling) {
       const uint16_t steps_per_min = MIN((uint32_t)UINT16_MAX,
-                                         ROUND(delta_steps * MS_PER_MINUTE, delta_ms));
+                                         ROUND((uint64_t)delta_steps * MS_PER_MINUTE, delta_ms));
       const uint16_t bpm = MAX(0, MIN((int32_t)UINT16_MAX, wrkt_data->current_bpm));
       delta_distance_mm = activity_private_compute_cycling_distance_mm(delta_ms,
                                                                         0 /* vmc */,

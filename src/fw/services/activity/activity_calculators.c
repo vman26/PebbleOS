@@ -89,6 +89,7 @@ uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_
   // Motion intensity bonus from VMC.
   const uint32_t k_vmc_cap = 800;
   const uint32_t vmc_capped = MIN(vmc, k_vmc_cap);
+  // Empirical scale from motion intensity to speed contribution: 0.18 m/min per VMC unit.
   speed_mm_per_min += vmc_capped * 180;
 
   // Cycling generally has fewer steps than running; penalize high step cadence.
@@ -101,7 +102,7 @@ uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_
 
   // Heart rate can inform effort when available.
   if (bpm > 95) {
-    // Above 95 BPM, add 0.9 m/min per BPM, capped to avoid unrealistic spikes.
+    // Above 95 BPM, add 0.9 m/min per BPM and cap at +60 m/min to avoid unrealistic spikes.
     speed_mm_per_min += MIN((uint32_t)(bpm - 95) * 900, (uint32_t)60 * MM_PER_METER);
   }
 
