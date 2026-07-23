@@ -20,10 +20,12 @@ void workout_data_update(void *data) {
                                            &workout_data->hr_zone);
 
   if (workout_data->duration_s && workout_data->distance_m) {
+    const int32_t duration_s = workout_data->duration_s;
     workout_data->avg_pace = health_util_get_pace(workout_data->duration_s,
                                                   workout_data->distance_m);
-    workout_data->avg_speed_m_per_h = ROUND((uint64_t)workout_data->distance_m * SECONDS_PER_HOUR,
-                                            workout_data->duration_s);
+    workout_data->avg_speed_m_per_h = (duration_s > 0)
+        ? ROUND((uint64_t)workout_data->distance_m * SECONDS_PER_HOUR, duration_s)
+        : 0;
   } else {
     workout_data->avg_speed_m_per_h = 0;
   }

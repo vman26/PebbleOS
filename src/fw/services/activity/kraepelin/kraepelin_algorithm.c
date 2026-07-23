@@ -2098,7 +2098,8 @@ static void prv_cycling_activity_update(KAlgState *alg_state, KAlgStepActivitySt
   const uint32_t k_min_active_duration_secs = 6 * SECONDS_PER_MINUTE;
   const uint32_t k_start_debounce_minutes = 3;
   const uint16_t k_min_vmc = 120;  // Require sustained wrist motion before tracking.
-  // Keep this low so cycling detection does not misclassify normal walk/run sessions.
+  // Keep this low so cycling detection does not misclassify normal walk/run sessions; 25 SPM is
+  // below normal sustained walking cadence while still tolerating occasional wrist-triggered steps.
   const uint16_t k_max_steps = 25;
 
   const bool is_active_minute = !definitely_not_worn && (vmc >= k_min_vmc) && (steps <= k_max_steps);

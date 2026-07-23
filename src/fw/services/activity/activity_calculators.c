@@ -80,8 +80,10 @@ uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_
                                                            uint16_t bpm, uint32_t elapsed_s) {
   // Keep estimates in a plausible cycling range. We bias early session speed higher and let it
   // settle as the session progresses.
+  // Bounds model casual/commuter rides: roughly 7.2 km/h to 31.2 km/h.
   const uint32_t k_min_speed_mm_per_min = 120 * MM_PER_METER;  // 7.2 km/h
   const uint32_t k_max_speed_mm_per_min = 520 * MM_PER_METER;  // 31.2 km/h
+  // Base speed anchored near a relaxed rollout before motion/HR adjustments.
   const uint32_t k_base_speed_mm_per_min = 170 * MM_PER_METER; // 10.2 km/h
 
   uint32_t speed_mm_per_min = k_base_speed_mm_per_min;

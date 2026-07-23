@@ -143,6 +143,11 @@ static void prv_handle_movement_update(HealthEventMovementUpdateData *event) {
 
   if (!workout_service_is_paused()) {
     const time_t delta_ms = (now_ts - wrkt_data->last_movement_event_time_ts) * MS_PER_SECOND;
+    if (delta_ms == 0) {
+      wrkt_data->last_event_step_count = new_event_steps;
+      wrkt_data->last_movement_event_time_ts = now_ts;
+      return;
+    }
     const uint32_t delta_steps = new_event_steps - wrkt_data->last_event_step_count;
     int32_t delta_distance_mm = 0;
 
