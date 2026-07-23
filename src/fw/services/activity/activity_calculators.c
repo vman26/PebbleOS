@@ -122,7 +122,8 @@ uint32_t activity_private_compute_cycling_distance_mm(uint32_t ms, uint16_t vmc,
 
   const uint64_t speed_mm_per_min =
       activity_private_compute_cycling_speed_mm_per_min(vmc, steps_per_min, bpm, elapsed_s);
-  return ROUND(speed_mm_per_min * ms, (uint64_t)SECONDS_PER_MINUTE * MS_PER_SECOND);
+  const uint64_t ms_per_min = (uint64_t)SECONDS_PER_MINUTE * MS_PER_SECOND;
+  return (speed_mm_per_min * ms + (ms_per_min / 2)) / ms_per_min;
 }
 
 
