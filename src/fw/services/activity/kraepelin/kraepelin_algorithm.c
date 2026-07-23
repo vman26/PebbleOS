@@ -2097,8 +2097,8 @@ static void prv_cycling_activity_update(KAlgState *alg_state, KAlgStepActivitySt
   const uint32_t k_max_inactive_minutes = 4;
   const uint32_t k_min_active_duration_secs = 6 * SECONDS_PER_MINUTE;
   const uint32_t k_start_debounce_minutes = 3;
-  const uint16_t k_min_vmc = 120;
-  const uint16_t k_max_steps = 25;
+  const uint16_t k_min_vmc = 120;  // Require sustained wrist motion before tracking.
+  const uint16_t k_max_steps = 25; // Keep this non-step focused to avoid walk/run overlap.
 
   const bool is_active_minute = !definitely_not_worn && (vmc >= k_min_vmc) && (steps <= k_max_steps);
   const bool activity_in_progress = is_active_minute && !shutting_down;

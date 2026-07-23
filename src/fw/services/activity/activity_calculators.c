@@ -94,16 +94,18 @@ uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_
   // Cycling generally has fewer steps than running; penalize high step cadence.
   if (steps_per_min > 80) {
     const uint32_t excess_steps = steps_per_min - 80;
+    // Subtract 1.2 m/min of estimated cycling speed for each excess step/min over threshold.
     speed_mm_per_min = MAX((int32_t)k_min_speed_mm_per_min,
                            (int32_t)speed_mm_per_min - (int32_t)(excess_steps * 1200));
   }
 
   // Heart rate can inform effort when available.
   if (bpm > 95) {
+    // Above 95 BPM, add 0.9 m/min per BPM, capped to avoid unrealistic spikes.
     speed_mm_per_min += MIN((uint32_t)(bpm - 95) * 900, (uint32_t)60 * MM_PER_METER);
   }
 
-  // Start fast then decay over ~10 minutes.
+  // Model an early-session burst: +60 m/min at minute 0 decaying linearly to +0 by minute 10.
   const uint32_t elapsed_min = elapsed_s / SECONDS_PER_MINUTE;
   if (elapsed_min < 10) {
     speed_mm_per_min += (10 - elapsed_min) * 6 * MM_PER_METER;
