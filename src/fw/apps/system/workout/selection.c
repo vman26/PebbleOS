@@ -39,7 +39,7 @@ static uint32_t prv_get_icon_resource_id(WorkoutType workout_type) {
     case WorkoutType_Walk:
       return RESOURCE_ID_WORKOUT_APP_WALK_SMALL;
     case WorkoutType_Cycling:
-      return RESOURCE_ID_WORKOUT_APP_RUN_SMALL;
+      return RESOURCE_ID_WORKOUT_APP_CYCLING_SMALL;
     case WorkoutType_OpenWorkout:
       return RESOURCE_ID_WORKOUT_APP_WORKOUT_SMALL;
     default:

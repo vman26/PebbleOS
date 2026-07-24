@@ -2540,6 +2540,21 @@
       "file": "normal/base/images/workout_app_three.svg"
     },
     {
+      "type": "png",
+      "name": "WORKOUT_APP_CYCLING",
+      "file": "normal/base/images/workout_app_cycling.png"
+    },
+    {
+      "type": "png",
+      "name": "WORKOUT_APP_CYCLING_SMALL",
+      "file": "normal/base/images/workout_app_cycling_small.png"
+    },
+    {
+      "type": "png",
+      "name": "WORKOUT_APP_CYCLING_TINY",
+      "file": "normal/base/images/workout_app_cycling_tiny.png"
+    },
+    {
       "type": "pdc",
       "name": "HEART_TINY",
       "file": "normal/base/images/Pebble_25x25_Heart.svg"
