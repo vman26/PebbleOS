@@ -12,14 +12,16 @@ uint32_t activity_private_compute_distance_mm(uint32_t steps, uint32_t ms);
 
 // ------------------------------------------------------------------------------------------------
 // Estimate cycling speed (in millimeters per minute) from currently available motion signals.
-uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_t steps_per_min,
+// cadence_per_min is derived from the motion sensor output (wrist movement rate), used as a proxy
+// for pedal cadence rather than actual footstep count.
+uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_t cadence_per_min,
                                                            uint16_t bpm, uint32_t elapsed_s);
 
 // ------------------------------------------------------------------------------------------------
 // Estimate cycling distance (in millimeters) over elapsed time from currently available motion
 // signals.
 uint32_t activity_private_compute_cycling_distance_mm(uint32_t ms, uint16_t vmc,
-                                                      uint16_t steps_per_min, uint16_t bpm,
+                                                      uint16_t cadence_per_min, uint16_t bpm,
                                                       uint32_t elapsed_s);
 
 

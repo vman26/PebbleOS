@@ -76,7 +76,7 @@ uint32_t activity_private_compute_distance_mm(uint32_t steps, uint32_t ms) {
 }
 
 // ------------------------------------------------------------------------------------------------
-uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_t steps_per_min,
+uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_t cadence_per_min,
                                                            uint16_t bpm, uint32_t elapsed_s) {
   // Keep estimates in a plausible cycling range. We bias early session speed higher and let it
   // settle as the session progresses.
@@ -96,12 +96,13 @@ uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_
   // so typical VMC ranges stay inside realistic bike speeds while still reacting to effort shifts.
   speed_mm_per_min += vmc_capped * 180;
 
-  // Cycling generally has fewer steps than running; penalize high step cadence.
-  if (steps_per_min > 80) {
-    const uint32_t excess_steps = steps_per_min - 80;
-    // Subtract 1.2 m/min of estimated cycling speed for each excess step/min over threshold.
+  // Penalize high cadence — values above typical cycling range suggest walking/running motion
+  // rather than pedalling.
+  if (cadence_per_min > 80) {
+    const uint32_t excess_cadence = cadence_per_min - 80;
+    // Subtract 1.2 m/min of estimated cycling speed for each unit over threshold.
     speed_mm_per_min = MAX((int32_t)k_min_speed_mm_per_min,
-                           (int32_t)speed_mm_per_min - (int32_t)(excess_steps * 1200));
+                           (int32_t)speed_mm_per_min - (int32_t)(excess_cadence * 1200));
   }
 
   // Heart rate can inform effort when available.
@@ -121,14 +122,14 @@ uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_
 
 // ------------------------------------------------------------------------------------------------
 uint32_t activity_private_compute_cycling_distance_mm(uint32_t ms, uint16_t vmc,
-                                                      uint16_t steps_per_min, uint16_t bpm,
+                                                      uint16_t cadence_per_min, uint16_t bpm,
                                                       uint32_t elapsed_s) {
   if (ms == 0) {
     return 0;
   }
 
   const uint64_t speed_mm_per_min =
-      activity_private_compute_cycling_speed_mm_per_min(vmc, steps_per_min, bpm, elapsed_s);
+      activity_private_compute_cycling_speed_mm_per_min(vmc, cadence_per_min, bpm, elapsed_s);
   const uint64_t ms_per_min = (uint64_t)SECONDS_PER_MINUTE * MS_PER_SECOND;
   return (speed_mm_per_min * ms + (ms_per_min / 2)) / ms_per_min;
 }
