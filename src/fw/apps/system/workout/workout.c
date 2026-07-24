@@ -230,6 +230,9 @@ static void prv_init(void) {
       workout_utils_find_ongoing_activity_session(&data->ongoing_session);
 
   if (found_automatic_session) {
+    // For cycling sessions auto-detected from the activity classifier, silently take over the
+    // session instead of showing the "workout detected" dialog, since the classifier already
+    // provides sufficient confirmation that the user is cycling.
     if (data->ongoing_session.type == ActivitySessionType_Cycling &&
         workout_service_takeover_activity_session(&data->ongoing_session)) {
       prv_prep_and_open_active_window(data->ongoing_session.type);

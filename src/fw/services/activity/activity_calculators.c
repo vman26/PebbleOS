@@ -88,7 +88,9 @@ static uint32_t prv_icbrt(uint32_t n) {
     x <<= 1;
   }
   x >>= 1;  // x is now a conservative lower bound
-  // Three Newton-Raphson iterations are sufficient for 32-bit inputs.
+  // Three Newton-Raphson steps from a good initial estimate are sufficient to reach
+  // the correct floor for any 32-bit input (the error after seeding is at most a
+  // factor of 2, and each step roughly cubes the convergence rate).
   for (int i = 0; i < 3; i++) {
     uint32_t x3 = x * x * x;
     if (x3 == n) {
@@ -114,7 +116,8 @@ static uint32_t prv_icbrt(uint32_t n) {
 // for wrist-mounted cycling detection.  They have been chosen so that:
 //   - A resting-HR baseline at VMC=120 yields ~3.5 m/s  (12.6 km/h, casual cycling)
 //   - A hard effort at VMC=400 yields ~7 m/s  (25 km/h)
-// These should be re-calibrated with on-device cycling data.
+//
+// TODO: Re-calibrate k1_x1000 and k2_x1000 with on-device cycling data once available.
 uint32_t activity_private_compute_cycling_distance_mm(uint32_t ms, uint16_t vmc, uint8_t hr_bpm) {
   if (ms == 0) {
     return 0;
@@ -148,7 +151,7 @@ uint32_t activity_private_compute_cycling_distance_mm(uint32_t ms, uint16_t vmc,
 // Keytel formula (men, adapted):
 //   Cal/min = (-55.097 + 0.631 × HR + 0.199 × weight_kg + 0.202 × age_years) / 4.184
 //
-// Implemented in fixed-point integer arithmetic (all multiplications scaled by 1000) to avoid
+// Implemented in fixed-point integer arithmetic (coefficients scaled ×1000) to avoid
 // any floating-point overhead in background tasks on Cortex-M targets.
 //
 // MET 6.0 fallback (WHO cycling MET):
@@ -167,7 +170,8 @@ uint32_t activity_private_compute_cycling_active_calories_hr(uint8_t hr_bpm,
   const uint32_t age_years = (uint32_t)activity_prefs_get_age_years();
 
   if (hr_bpm > 0 && weight_kg > 0 && age_years > 0) {
-    // Keytel formula.  All constants scaled × 1 to avoid fractions; 4.184 → 4184/1000.
+    // Keytel formula.  Constants are pre-multiplied ×1000 (e.g., 0.631 → 631) so all
+    // arithmetic stays in integers; 4.184 is represented as the divisor 4184/1000.
     // mCal/min = (-55097 + 631 × HR + 199 × weight_kg + 202 × age_years) × 1000 / 4184
     int32_t keytel_x1 = -55097
                         + (int32_t)(631 * (uint32_t)hr_bpm)

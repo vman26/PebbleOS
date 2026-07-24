@@ -480,6 +480,9 @@ static uint32_t prv_icbrt(uint32_t n) {
   }
   // Initial estimate: use bit-length to place x near the true root.
   uint32_t x = n;
+  // Newton-Raphson converges from above within at most ceil(log2(log2(n))) steps.
+  // 20 iterations is a safe upper bound for any 32-bit input; the loop exits early
+  // once the estimate stops decreasing.
   for (int i = 0; i < 20; i++) {
     uint32_t x2 = x * x;
     if (x2 == 0) {
@@ -2235,15 +2238,14 @@ static void prv_cycling_activity_update(KAlgState *alg_state, KAlgStepActivitySt
   const uint32_t k_max_inactive_minutes = 4;
   const uint32_t k_min_active_duration_secs = 6 * SECONDS_PER_MINUTE;
   const uint32_t k_start_debounce_minutes = 3;
-  const uint16_t k_min_vmc = 120;  // Require sustained wrist motion before tracking.
-  // Keep this low so cycling detection does not misclassify normal walk/run sessions; 25 SPM is
-  // below normal sustained walking cadence while still tolerating occasional wrist-triggered steps.
+  // Keep max_steps low so cycling detection does not misclassify normal walk/run sessions;
+  // 25 SPM is below sustained walking cadence while tolerating occasional wrist-triggered steps.
   const uint16_t k_max_steps = 25;
 
   // Require both the per-minute heuristic (VMC, step count) AND the epoch-level classifier
   // hysteresis to agree before treating a minute as an active cycling minute.
   const bool is_active_minute = !definitely_not_worn
-      && (vmc >= k_min_vmc)
+      && (vmc >= KALG_CYCLING_VMC_ACTIVE_THRESHOLD)
       && (steps <= k_max_steps)
       && alg_state->cycling_clf.cycling_detected;
   const bool activity_in_progress = is_active_minute && !shutting_down;

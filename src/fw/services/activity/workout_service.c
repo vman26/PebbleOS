@@ -156,7 +156,11 @@ static void prv_handle_movement_update(HealthEventMovementUpdateData *event) {
                                            ROUND((uint64_t)delta_steps * MS_PER_MINUTE, delta_ms));
       // Manual workout movement events do not expose VMC directly; derive a conservative proxy
       // from observed cadence so the VMC cube-root model still responds to motion changes.
-      const uint16_t vmc_proxy = MIN((uint16_t)800, (uint16_t)(cadence_per_min * 16));
+      // Scale factor (16 VMC per cadence unit) is empirically derived; cap at 800 to stay within
+      // the typical cycling VMC range used by activity_private_compute_cycling_distance_mm.
+      const uint16_t k_vmc_per_cadence = 16;
+      const uint16_t k_vmc_proxy_max = 800;
+      const uint16_t vmc_proxy = MIN(k_vmc_proxy_max, (uint16_t)(cadence_per_min * k_vmc_per_cadence));
       const uint8_t hr_bpm = (uint8_t)MAX(0, MIN((int32_t)UINT8_MAX, wrkt_data->current_bpm));
       delta_distance_mm = activity_private_compute_cycling_distance_mm(delta_ms,
                                                                         vmc_proxy,
