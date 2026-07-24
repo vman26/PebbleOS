@@ -57,6 +57,8 @@ typedef enum {
   HealthMetricHeartRateBPM,
   //! The raw heart rate value of the most recent sample, in beats per minute.
   HealthMetricHeartRateRawBPM,
+  //! The total distance covered while cycling, in meters.
+  HealthMetricCycledDistanceMeters,
 } HealthMetric;
 
 //! Type used to represent HealthMetric values
@@ -364,6 +366,8 @@ typedef enum {
   HealthEventMetricAlert = 3,
   //! Value of \ref HealthMetricHeartRateBPM or \ref HealthMetricHeartRateRawBPM has changed.
   HealthEventHeartRateUpdate = 4,
+  //! A cycling activity session has started or ended (auto-detected or manual).
+  HealthEventActivityUpdate = 5,
 } HealthEventType;
 
 //! Developer-supplied event handler, called when a health-related event occurs after subscribing
@@ -446,6 +450,13 @@ HealthMetricAlert *health_service_register_metric_alert(HealthMetric metric, Hea
 //! @return `true` on success, `false` on failure
 bool health_service_cancel_metric_alert(HealthMetricAlert *alert);
 
+//! Activity type values stored in \ref HealthMinuteData.activity_type.
+//! A value of 0 means no specific activity was detected in this minute.
+#define HEALTH_MINUTE_ACTIVITY_NONE     0
+//! Cycling was auto-detected in this minute.
+//! Matches the value 11 (0b1011) which fits in the 4-bit activity_type field.
+#define HEALTH_MINUTE_ACTIVITY_CYCLING  11
+
 //! Structure representing a single minute data record returned
 //! by \ref health_service_get_minute_history().
 //! The `orientation` field encodes the angle of the watch in the x-y plane (the "yaw") in the
@@ -460,7 +471,9 @@ typedef struct {
   bool is_invalid: 1;         //!< `true` if the item doesn't represents actual data
                               //!< and should be ignored.
   AmbientLightLevel light: 3; //!< Instantaneous light level during this minute.
-  uint8_t padding: 4;
+  //!< Activity type detected in this minute; one of the \ref HEALTH_MINUTE_ACTIVITY_* constants.
+  //!< A value of 0 means no specific activity was detected.
+  uint8_t activity_type: 4;
   uint8_t heart_rate_bpm;     //!< heart rate in beats per minute
   uint8_t reserved[6];        //!< Reserved for future use.
 } HealthMinuteData;
@@ -534,12 +547,23 @@ typedef struct {
 } HealthEventHeartRateUpdateData;
 
 //! @internal
+//! Data passed when a \ref HealthEventActivityUpdate event fires (cycling session started/ended).
+typedef struct {
+  time_t session_start_utc;   //!< UTC start time of the cycling session.
+  uint32_t session_length_s;  //!< Duration of the session in seconds; 0 if session just started.
+  uint32_t distance_m;        //!< Total distance in metres (0 while session is ongoing).
+  uint32_t active_calories;   //!< Active calories burned (0 while session is ongoing).
+  bool session_ongoing;       //!< true while the session is in progress; false when it ended.
+} HealthEventActivityUpdateData;
+
+//! @internal
 typedef struct  {
   union {
     HealthEventMovementUpdateData movement_update;
     HealthEventSleepUpdateData sleep_update;
     HealthEventSignificantUpdateData significant_update;
     HealthEventHeartRateUpdateData heart_rate_update;
+    HealthEventActivityUpdateData activity_update;
   };
 } HealthEventData;
 

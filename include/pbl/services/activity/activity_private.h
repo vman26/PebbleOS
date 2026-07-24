@@ -163,6 +163,7 @@ typedef enum {
   ActivitySettingsKeyHeartRateZone1Minutes,
   ActivitySettingsKeyHeartRateZone2Minutes,
   ActivitySettingsKeyHeartRateZone3Minutes,
+  ActivitySettingsKeyCycledDistanceMetersHistory, // ActivitySettingsValueHistory
 } ActivitySettingsKey;
 
 
@@ -176,6 +177,7 @@ typedef struct {
   ActivityScalarStore distance_meters;
   ActivityScalarStore resting_kcalories;
   ActivityScalarStore active_kcalories;
+  ActivityScalarStore cycling_distance_meters;    // cumulative cycling distance for today
 } ActivityStepData;
 
 // IMPORTANT: activity_metrics_prv_get_metric_info() assumes that every element of ActivitySleepData

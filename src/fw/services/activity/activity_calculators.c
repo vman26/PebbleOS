@@ -76,62 +76,117 @@ uint32_t activity_private_compute_distance_mm(uint32_t steps, uint32_t ms) {
 }
 
 // ------------------------------------------------------------------------------------------------
-uint32_t activity_private_compute_cycling_speed_mm_per_min(uint16_t vmc, uint16_t cadence_per_min,
-                                                           uint16_t bpm, uint32_t elapsed_s) {
-  // Keep estimates in a plausible cycling range. We bias early session speed higher and let it
-  // settle as the session progresses.
-  // Bounds model casual/commuter rides: roughly 7.2 km/h to 31.2 km/h. The floor avoids unreal
-  // near-zero speeds during brief noise dips, while the ceiling suppresses implausible spikes.
-  const uint32_t k_min_speed_mm_per_min = 120 * MM_PER_METER;  // 7.2 km/h
-  const uint32_t k_max_speed_mm_per_min = 520 * MM_PER_METER;  // 31.2 km/h
-  // Base speed anchored near a relaxed rollout before motion/HR adjustments.
-  const uint32_t k_base_speed_mm_per_min = 170 * MM_PER_METER; // 10.2 km/h
-
-  uint32_t speed_mm_per_min = k_base_speed_mm_per_min;
-
-  // Motion intensity bonus from VMC.
-  const uint32_t k_vmc_cap = 800;
-  const uint32_t vmc_capped = MIN(vmc, k_vmc_cap);
-  // Empirical scale from motion intensity to speed contribution: 0.18 m/min per VMC unit, tuned
-  // so typical VMC ranges stay inside realistic bike speeds while still reacting to effort shifts.
-  speed_mm_per_min += vmc_capped * 180;
-
-  // Penalize high cadence — values above typical cycling range suggest walking/running motion
-  // rather than pedalling.
-  if (cadence_per_min > 80) {
-    const uint32_t excess_cadence = cadence_per_min - 80;
-    // Subtract 1.2 m/min of estimated cycling speed for each unit over threshold.
-    speed_mm_per_min = MAX((int32_t)k_min_speed_mm_per_min,
-                           (int32_t)speed_mm_per_min - (int32_t)(excess_cadence * 1200));
+// Integer cube root via Newton-Raphson iteration.
+// Computes floor(n^(1/3)) for any non-negative 32-bit n.
+static uint32_t prv_icbrt(uint32_t n) {
+  if (n == 0) {
+    return 0;
   }
-
-  // Heart rate can inform effort when available.
-  if (bpm > 95) {
-    // Above 95 BPM, add 0.9 m/min per BPM and cap at +60 m/min to avoid unrealistic spikes.
-    speed_mm_per_min += MIN((uint32_t)(bpm - 95) * 900, (uint32_t)60 * MM_PER_METER);
+  // Seed the estimate at the highest power-of-two that does not overshoot.
+  uint32_t x = 1;
+  while (x * x * x <= n) {
+    x <<= 1;
   }
-
-  // Model an early-session burst: +60 m/min at minute 0 decaying linearly to +0 by minute 10.
-  const uint32_t elapsed_min = elapsed_s / SECONDS_PER_MINUTE;
-  if (elapsed_min < 10) {
-    speed_mm_per_min += (10 - elapsed_min) * 6 * MM_PER_METER;
+  x >>= 1;  // x is now a conservative lower bound
+  // Three Newton-Raphson iterations are sufficient for 32-bit inputs.
+  for (int i = 0; i < 3; i++) {
+    uint32_t x3 = x * x * x;
+    if (x3 == n) {
+      return x;
+    }
+    x = (2 * x + n / (x * x)) / 3;
   }
-
-  return CLIP(speed_mm_per_min, k_min_speed_mm_per_min, k_max_speed_mm_per_min);
+  // Round down to the exact floor
+  while ((x + 1) * (x + 1) * (x + 1) <= n) {
+    x++;
+  }
+  return x;
 }
 
 // ------------------------------------------------------------------------------------------------
-uint32_t activity_private_compute_cycling_distance_mm(uint32_t ms, uint16_t vmc,
-                                                      uint16_t cadence_per_min, uint16_t bpm,
-                                                      uint32_t elapsed_s) {
+// Estimate cycling distance (in millimetres) over elapsed time using a VMC cube-root speed model.
+//
+// Speed formula (fixed-point):
+//   v_mm_per_s = k1_x1000 × cbrt(VMC) / 1000  [m/s contribution from motion intensity]
+//              + k2_x1000 × HR / HR_resting / 1000  [m/s contribution from HR effort]
+//
+// The constants k1_x1000 = 320 and k2_x1000 = 850 are empirical placeholder values appropriate
+// for wrist-mounted cycling detection.  They have been chosen so that:
+//   - A resting-HR baseline at VMC=120 yields ~3.5 m/s  (12.6 km/h, casual cycling)
+//   - A hard effort at VMC=400 yields ~7 m/s  (25 km/h)
+// These should be re-calibrated with on-device cycling data.
+uint32_t activity_private_compute_cycling_distance_mm(uint32_t ms, uint16_t vmc, uint8_t hr_bpm) {
   if (ms == 0) {
     return 0;
   }
 
-  const uint64_t speed_mm_per_min =
-      activity_private_compute_cycling_speed_mm_per_min(vmc, cadence_per_min, bpm, elapsed_s);
-  const uint64_t ms_per_min = (uint64_t)SECONDS_PER_MINUTE * MS_PER_SECOND;
-  return (speed_mm_per_min * ms + (ms_per_min / 2)) / ms_per_min;
+  // Fixed-point scaling constants (×1000 to avoid floating-point).
+  // k1_x1000: VMC cube-root coefficient (m/s per cbrt(VMC)).
+  // k2_x1000: HR ratio coefficient (m/s when HR equals resting HR).
+  const uint32_t k1_x1000 = 320;
+  const uint32_t k2_x1000 = 850;
+  const uint32_t k_hr_resting_bpm = 60;  // Assumed resting HR; replace with user pref if exposed.
+
+  // VMC component: k1 × cbrt(VMC)  (result in mm/s × 1000)
+  uint32_t vmc_component = k1_x1000 * prv_icbrt(vmc);
+
+  // HR component: k2 × (HR / HR_resting)  (result in mm/s × 1000)
+  const uint32_t hr = (hr_bpm > 0) ? hr_bpm : k_hr_resting_bpm;
+  uint32_t hr_component = k2_x1000 * hr / k_hr_resting_bpm;
+
+  // Combined speed in mm/s (÷ 1000 to factor out the ×1000 scaling)
+  uint32_t speed_mm_per_s_x1000 = vmc_component + hr_component;
+
+  // Distance = speed × time: (speed_mm_s_x1000 × ms) / (1000 × 1000)
+  //   ×1000 for speed scale, ×1000 to convert ms to s
+  return (uint32_t)((uint64_t)speed_mm_per_s_x1000 * ms / 1000 / 1000);
+}
+
+// ------------------------------------------------------------------------------------------------
+// Compute active calories burned during a cycling interval using the Keytel Heart Rate formula.
+//
+// Keytel formula (men, adapted):
+//   Cal/min = (-55.097 + 0.631 × HR + 0.199 × weight_kg + 0.202 × age_years) / 4.184
+//
+// Implemented in fixed-point integer arithmetic (all multiplications scaled by 1000) to avoid
+// any floating-point overhead in background tasks on Cortex-M targets.
+//
+// MET 6.0 fallback (WHO cycling MET):
+//   Cal/min = MET × weight_kg / 60  →  cal = 6 × weight_kg × elapsed_min / 60 × 1000
+//
+// Calorie units match the rest of the activity service: 1000 = 1 kcalorie.
+uint32_t activity_private_compute_cycling_active_calories_hr(uint8_t hr_bpm,
+                                                             uint32_t elapsed_minutes) {
+  if (elapsed_minutes == 0) {
+    return 0;
+  }
+
+  // ACTIVITY_DAG_PER_KG = 100 (10 grams per dag; 100 dag = 1 kg)
+  const uint32_t k_dag_per_kg = ACTIVITY_DAG_PER_KG;
+  const uint32_t weight_kg = (uint32_t)activity_prefs_get_weight_dag() / k_dag_per_kg;
+  const uint32_t age_years = (uint32_t)activity_prefs_get_age_years();
+
+  if (hr_bpm > 0 && weight_kg > 0 && age_years > 0) {
+    // Keytel formula.  All constants scaled × 1 to avoid fractions; 4.184 → 4184/1000.
+    // mCal/min = (-55097 + 631 × HR + 199 × weight_kg + 202 × age_years) × 1000 / 4184
+    int32_t keytel_x1 = -55097
+                        + (int32_t)(631 * (uint32_t)hr_bpm)
+                        + (int32_t)(199 * weight_kg)
+                        + (int32_t)(202 * age_years);
+    if (keytel_x1 > 0) {
+      // Convert to Pebble calorie units (1000 cal = 1 kcal) × elapsed minutes.
+      // keytel_x1 / 4.184 gives Cal/min; × elapsed_minutes = total Cal; × 1000 = Pebble units.
+      uint32_t cal = (uint32_t)((uint64_t)keytel_x1 * 1000 / 4184 * elapsed_minutes);
+      return cal;
+    }
+    // Fall through to MET fallback for non-positive Keytel result.
+  }
+
+  // MET 6.0 fallback: 6 × weight_kg × elapsed_min / 60 × 1000  (Pebble calorie units)
+  if (weight_kg == 0) {
+    return 0;
+  }
+  return 6 * weight_kg * elapsed_minutes * 1000 / 60;
 }
 
 

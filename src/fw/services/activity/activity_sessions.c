@@ -166,6 +166,11 @@ static bool prv_activity_sessions_equal(ActivitySession *session_a, ActivitySess
 // If we already have this activity registered, it is updated.
 void activity_sessions_prv_add_activity_session(ActivitySession *session) {
   ActivityState *state = activity_private_state();
+
+  // Track whether a completed cycling session was stored so we can fire the health event
+  // after releasing the mutex (event delivery must not happen under the lock).
+  bool fire_cycling_done_event = false;
+
   mutex_lock_recursive(state->mutex);
   {
     if (!session->ongoing) {
@@ -199,6 +204,29 @@ void activity_sessions_prv_add_activity_session(ActivitySession *session) {
   }
 unlock:
   mutex_unlock_recursive(state->mutex);
+
+  // Fire a HealthEventActivityUpdate when a cycling session is recorded as completed.
+  // This allows watch-faces and companion apps to receive an immediate notification.
+  if ((session->type == ActivitySessionType_Cycling) && !session->ongoing) {
+    fire_cycling_done_event = true;
+  }
+
+  if (fire_cycling_done_event) {
+    PebbleEvent e = {
+      .type = PEBBLE_HEALTH_SERVICE_EVENT,
+      .health_event = {
+        .type = HealthEventActivityUpdate,
+        .data.activity_update = {
+          .session_start_utc = (uint32_t)session->start_utc,
+          .session_length_s = session->length_min * SECONDS_PER_MINUTE,
+          .distance_m = session->step_data.distance_meters,
+          .active_calories = session->step_data.active_kcalories * ACTIVITY_CALORIES_PER_KCAL,
+          .session_ongoing = false,
+        },
+      },
+    };
+    event_put(&e);
+  }
 }
 
 
@@ -656,6 +684,33 @@ void activity_sessions_prv_init(SettingsFile *file, time_t utc_now) {
 
 
 // --------------------------------------------------------------------------------------
+// Scan today's cycling sessions and update ActivityMetricCycledDistanceMeters with their
+// combined distance so that health_service_sum_today() and related queries work correctly.
+static void prv_update_cycling_metrics(time_t utc_sec) {
+  ActivityState *state = activity_private_state();
+  mutex_lock_recursive(state->mutex);
+  {
+    // Sum distance across all cycling sessions recorded today.
+    uint32_t total_distance_m = 0;
+    time_t today_midnight = time_util_get_midnight_of(utc_sec);
+    for (uint16_t i = 0; i < state->activity_sessions_count; i++) {
+      const ActivitySession *session = &state->activity_sessions[i];
+      if (session->type != ActivitySessionType_Cycling) {
+        continue;
+      }
+      // Include sessions that started on or after today's midnight.
+      if (session->start_utc >= today_midnight) {
+        total_distance_m += session->step_data.distance_meters;
+      }
+    }
+    state->step_data.cycling_distance_meters = (ActivityScalarStore)MIN(total_distance_m,
+                                                                        UINT16_MAX);
+  }
+  mutex_unlock_recursive(state->mutex);
+}
+
+
+// --------------------------------------------------------------------------------------
 void NOINLINE activity_sessions_prv_minute_handler(time_t utc_sec) {
   ActivityState *state = activity_private_state();
   time_t last_sleep_processed_utc = activity_algorithm_get_last_sleep_utc();
@@ -679,6 +734,9 @@ void NOINLINE activity_sessions_prv_minute_handler(time_t utc_sec) {
     + ACTIVITY_LAST_SLEEP_MINUTE_OF_DAY * SECONDS_PER_MINUTE;
   prv_update_sleep_metrics(utc_sec, last_sleep_utc_of_day,
                                              last_sleep_processed_utc);
+
+  // Update cycling distance metric from today's cycling sessions.
+  prv_update_cycling_metrics(utc_sec);
 
   // Log any new activites we detected to the phone
   prv_log_activities(utc_sec);

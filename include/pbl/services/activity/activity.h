@@ -132,6 +132,8 @@ typedef enum {
   ActivityMetricHeartRateZone2Minutes,
   ActivityMetricHeartRateZone3Minutes,
 
+  ActivityMetricCycledDistanceMeters,              // Cumulative cycling distance for today
+
   // KEEP THIS AT THE END
   ActivityMetricNumMetrics,
   ActivityMetricInvalid = ActivityMetricNumMetrics,

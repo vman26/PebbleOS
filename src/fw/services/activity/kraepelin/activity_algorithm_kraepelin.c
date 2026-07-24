@@ -939,6 +939,9 @@ static uint32_t NOINLINE prv_fill_minute_record(time_t utc_sec, AlgMinuteDLSSamp
   // Set active flag
   m_rec->base.active = (m_rec->base.steps >= ACTIVITY_ACTIVE_MINUTE_MIN_STEPS) ? 1 : 0;
 
+  // Set cycling flag from the epoch-level hysteresis classifier.
+  m_rec->base.cycling = kalg_cycling_detected(s_alg_state->k_state) ? 1 : 0;
+
   // Fill in resting calories, active calories, and distance covered in the previous minute
   const uint32_t resting_calories = activity_metrics_prv_get_resting_calories();
   m_rec->resting_calories = resting_calories - s_alg_state->prev_resting_calories;
@@ -1131,6 +1134,8 @@ static bool prv_insert_health_minute_record(AlgReadMinutesContext *context, time
     .vmc = base_fields->vmc,
     .light = health_light_level,
     .heart_rate_bpm = heart_rate_bpm,
+    .activity_type = base_fields->cycling ? HEALTH_MINUTE_ACTIVITY_CYCLING
+                                          : HEALTH_MINUTE_ACTIVITY_NONE,
   };
 
   context->minute_data[dst_index] = record;

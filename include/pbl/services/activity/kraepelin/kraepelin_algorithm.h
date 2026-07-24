@@ -29,6 +29,22 @@ typedef struct KAlgState KAlgState;
 // should be: KALG_SLEEP_PARAMS.max_wake_minutes_early + KALG_SLEEP_HALF_WIDTH + 1
 #define KALG_MAX_UNCERTAIN_SLEEP_M 19
 
+// ---------------------------------------------------------------------------------------------
+// Cycling epoch-level auto-classifier constants
+//
+// Rolling hysteresis window: 3 minutes × 60 s / 5 s per epoch = 36 epochs.
+#define KALG_CYCLING_HYSTERESIS_WINDOW_EPOCHS 36
+// Fraction of cycling-classified epochs (×100) required to flip the cycling_detected flag.
+#define KALG_CYCLING_HYSTERESIS_THRESHOLD_PCT 80
+// Minimum VMC in a 5-second epoch to be considered active enough for cycling.
+#define KALG_CYCLING_VMC_ACTIVE_THRESHOLD     120
+// Maximum peak step-band FFT score in an epoch: values below this indicate non-step wrist motion
+// (typical of pedalling rather than walking/running).
+#define KALG_CYCLING_RHYTHM_STEP_THRESHOLD    1200
+// Maximum allowable variance in the z-axis (pitch) means across the hysteresis window.
+// Low variance indicates the wrist is held steadily on the handlebars.
+#define KALG_CYCLING_HANDLEBAR_PITCH_VAR_MAX  600
+
 // Activity types, used in KAlgSleepSessionCallback callback
 typedef enum {
   // ActivityType_Sleep encapsulates an entire sleep session from sleep entry to wake, and
@@ -157,3 +173,10 @@ void kalg_get_sleep_stats(KAlgState *state, KAlgOngoingSleepStats *stats);
 //! @param kalg_state the state structure passed into kalg_init
 //! @param enable true to start tracking, false to stop tracking
 void kalg_enable_activity_tracking(KAlgState *kalg_state, bool enable);
+
+//! Return whether the cycling auto-classifier's rolling hysteresis buffer currently indicates
+//! that the user is cycling.  Updated once per 5-second accelerometer epoch.
+//! @param state the state structure passed into kalg_init
+//! @return true if ≥ KALG_CYCLING_HYSTERESIS_THRESHOLD_PCT % of the last
+//!         KALG_CYCLING_HYSTERESIS_WINDOW_EPOCHS epochs were classified as cycling
+bool kalg_cycling_detected(KAlgState *state);

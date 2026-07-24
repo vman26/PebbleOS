@@ -14,7 +14,8 @@
 //   5: Added the flags field and the plugged_in bit
 //   5 (3/1/16): Added the active bit to flags
 //   6: Added heart rate bpm
-#define ALG_MINUTE_FILE_RECORD_VERSION  6
+//   7: Added cycling bit to flags
+#define ALG_MINUTE_FILE_RECORD_VERSION  7
 
 // Format of each minute in our minute file. In the minute file, which is stored as a settings file
 // on the watch, we store a subset of what we send to data logging since we only need the
@@ -32,7 +33,8 @@ typedef struct __attribute__((__packed__)) {
     struct {
       uint8_t plugged_in:1;
       uint8_t active:1;              // This is an "active" minute
-      uint8_t reserved:6;
+      uint8_t cycling:1;             // Cycling activity was auto-detected in this minute
+      uint8_t reserved:5;
     };
     uint8_t flags;
   };
@@ -60,8 +62,8 @@ typedef struct __attribute__((__packed__)) {
 //    7: Added heart rate bpm
 //   12: Added total heart rate weight
 //   13: Added heart rate zone
-//   14: ... (NYI, you decide!)
-#define ALG_DLS_MINUTES_RECORD_VERSION  13
+//   14: Added cycling bit to AlgMinuteFileSampleV5.flags (auto-detected cycling minute)
+#define ALG_DLS_MINUTES_RECORD_VERSION  14
 
 _Static_assert((ALG_DLS_MINUTES_RECORD_VERSION & (1 << 2)) > 0,
                "Android 3.10-4.0 requires bit 2 to be set");

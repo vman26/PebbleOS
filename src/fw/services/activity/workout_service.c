@@ -154,15 +154,13 @@ static void prv_handle_movement_update(HealthEventMovementUpdateData *event) {
     if (wrkt_data->type == ActivitySessionType_Cycling) {
       const uint16_t cadence_per_min = MIN((uint32_t)UINT16_MAX,
                                            ROUND((uint64_t)delta_steps * MS_PER_MINUTE, delta_ms));
-      const uint16_t bpm = MAX(0, MIN((int32_t)UINT16_MAX, wrkt_data->current_bpm));
-      // Manual workout movement events do not expose VMC directly; use a conservative proxy from
-      // observed cadence so the dynamic estimator still responds to motion changes.
+      // Manual workout movement events do not expose VMC directly; derive a conservative proxy
+      // from observed cadence so the VMC cube-root model still responds to motion changes.
       const uint16_t vmc_proxy = MIN((uint16_t)800, (uint16_t)(cadence_per_min * 16));
+      const uint8_t hr_bpm = (uint8_t)MAX(0, MIN((int32_t)UINT8_MAX, wrkt_data->current_bpm));
       delta_distance_mm = activity_private_compute_cycling_distance_mm(delta_ms,
                                                                         vmc_proxy,
-                                                                        cadence_per_min,
-                                                                        bpm,
-                                                                        wrkt_data->duration_s);
+                                                                        hr_bpm);
     } else {
       wrkt_data->steps += delta_steps;
       delta_distance_mm = activity_private_compute_distance_mm(delta_steps, delta_ms);

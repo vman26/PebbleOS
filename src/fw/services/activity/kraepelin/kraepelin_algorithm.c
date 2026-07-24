@@ -103,6 +103,27 @@ static const int KALG_MAX_STEP_FREQ = 20;
 // Used to indicate that we have not yet detected a potential starting point for a step activity
 #define KALG_START_TIME_NONE 0
 
+// State information for the cycling epoch-level classifier (auto-detection via hysteresis).
+typedef struct {
+  // Rolling ring-buffer of per-epoch z-axis (pitch) means, sized for the full 3-minute window.
+  int16_t epoch_z[KALG_CYCLING_HYSTERESIS_WINDOW_EPOCHS];
+  // Per-slot cycling vote: true if the corresponding epoch was classified as cycling.
+  bool epoch_vote[KALG_CYCLING_HYSTERESIS_WINDOW_EPOCHS];
+  // Number of cycling-classified epochs currently in the window.
+  uint8_t cycling_vote_count;
+  // Ring-buffer write position (also the position of the oldest entry when buf_len == cap).
+  uint8_t buf_pos;
+  // Number of valid entries in the buffer (ramps up from 0 to KALG_CYCLING_HYSTERESIS_WINDOW_EPOCHS).
+  uint8_t buf_len;
+  // Running sum of z-axis means for variance computation.
+  int32_t sum_z;
+  // Running sum of squared z-axis means for variance computation.
+  int32_t sum_z_sq;
+  // Current classifier result: true when ≥ KALG_CYCLING_HYSTERESIS_THRESHOLD_PCT of window
+  // epochs vote cycling.
+  bool cycling_detected;
+} KAlgCyclingClassifierState;
+
 // State information for the walk activity detection
 typedef struct {
   time_t start_time;           // potential start time of the activity
@@ -366,6 +387,9 @@ typedef struct KAlgState {
   KAlgDeepSleepActivityState deep_sleep_state;
   KAlgNotWornState not_worn_state;
 
+  // Epoch-level cycling classifier (rolling hysteresis buffer)
+  KAlgCyclingClassifierState cycling_clf;
+
   // Timestamp of the last minute of data passed to kalg_activities_update()
   time_t last_activity_update_utc;
 
@@ -444,6 +468,109 @@ static uint32_t prv_isqrt(uint32_t x) {
     one >>= 2;
   }
   return res;
+}
+
+
+// -----------------------------------------------------------------------------------------
+// Integer cube root via Newton-Raphson iteration (no floating-point).
+// Returns floor(cbrt(n)).
+static uint32_t prv_icbrt(uint32_t n) {
+  if (n == 0) {
+    return 0;
+  }
+  // Initial estimate: use bit-length to place x near the true root.
+  uint32_t x = n;
+  for (int i = 0; i < 20; i++) {
+    uint32_t x2 = x * x;
+    if (x2 == 0) {
+      break;
+    }
+    // Newton step: x_new = (2*x + n/x^2) / 3
+    uint32_t x_new = (2 * x + n / x2) / 3;
+    if (x_new >= x) {
+      break;
+    }
+    x = x_new;
+  }
+  // Ensure we didn't land above the true floor
+  while (x > 0 && x * x * x > n) {
+    x--;
+  }
+  return x;
+}
+
+
+// -----------------------------------------------------------------------------------------
+// Update the rolling cycling hysteresis classifier with a new 5-second epoch's signals.
+// Called from prv_calc_steps_in_epoch() once per epoch.
+//
+// @param state         KAlgState containing cycling_clf sub-state
+// @param real_vmc_5s   real VMC for this 5-second epoch
+// @param step_score    peak step-band FFT score (score_0) for this epoch;
+//                      low values indicate non-step wrist motion
+// @param epoch_z_mean  mean z-axis accelerometer value for this epoch (unscaled sample units)
+static void prv_cycling_epoch_update(KAlgState *state, uint32_t real_vmc_5s,
+                                     uint16_t step_score, int16_t epoch_z_mean) {
+  KAlgCyclingClassifierState *clf = &state->cycling_clf;
+  const uint8_t cap = KALG_CYCLING_HYSTERESIS_WINDOW_EPOCHS;
+
+  // --- Classify this epoch ---
+  // Conditions: sufficient wrist motion, weak step rhythmicity, and low pitch variance.
+  // Pitch variance is evaluated against the running window before inserting the new entry so
+  // that the check reflects the already-stable history.
+  bool high_vmc  = (real_vmc_5s >= KALG_CYCLING_VMC_ACTIVE_THRESHOLD);
+  bool low_steps = (step_score  <  (uint16_t)KALG_CYCLING_RHYTHM_STEP_THRESHOLD);
+
+  // Compute z-axis pitch variance from running sums (all integer arithmetic).
+  // var(z) = E[z^2] - E[z]^2 = sum_z_sq/n - (sum_z/n)^2
+  // To avoid division, compare: sum_z_sq*n - sum_z^2  vs  threshold * n^2
+  bool low_pitch_var = true;
+  if (clf->buf_len > 1) {
+    int32_t n             = (int32_t)clf->buf_len;
+    int32_t var_num       = clf->sum_z_sq * n - clf->sum_z * clf->sum_z;
+    int32_t thresh_scaled = (int32_t)KALG_CYCLING_HANDLEBAR_PITCH_VAR_MAX * n * n;
+    low_pitch_var = (var_num < thresh_scaled);
+  }
+
+  bool is_cycling_epoch = high_vmc && low_steps && low_pitch_var;
+
+  // --- Evict the oldest entry if the buffer is full ---
+  if (clf->buf_len == cap) {
+    // buf_pos currently points to the oldest slot (it is about to be overwritten).
+    int16_t old_z = clf->epoch_z[clf->buf_pos];
+    if (clf->epoch_vote[clf->buf_pos]) {
+      clf->cycling_vote_count--;
+    }
+    clf->sum_z    -= old_z;
+    clf->sum_z_sq -= (int32_t)old_z * old_z;
+  }
+
+  // --- Write new entry at buf_pos ---
+  clf->epoch_z[clf->buf_pos]    = epoch_z_mean;
+  clf->epoch_vote[clf->buf_pos] = is_cycling_epoch;
+  clf->sum_z    += epoch_z_mean;
+  clf->sum_z_sq += (int32_t)epoch_z_mean * epoch_z_mean;
+
+  if (is_cycling_epoch) {
+    clf->cycling_vote_count++;
+  }
+
+  clf->buf_pos = (clf->buf_pos + 1) % cap;
+  if (clf->buf_len < cap) {
+    clf->buf_len++;
+  }
+
+  // --- Update the hysteresis flag ---
+  if (clf->buf_len > 0) {
+    clf->cycling_detected =
+        ((uint32_t)clf->cycling_vote_count * 100 / clf->buf_len)
+        >= KALG_CYCLING_HYSTERESIS_THRESHOLD_PCT;
+  }
+
+  KALG_LOG_DEBUG("cycling_clf: vmc=%"PRIu32" score=%"PRIu16" z=%"PRId16
+                 " epoch=%d votes=%"PRIu8"/%"PRIu8" detected=%d",
+                 real_vmc_5s, step_score, epoch_z_mean, (int)is_cycling_epoch,
+                 clf->cycling_vote_count, clf->buf_len, (int)clf->cycling_detected);
 }
 
 
@@ -1092,7 +1219,8 @@ static bool prv_is_stepping(KAlgState *state, uint16_t max_mag_hz, uint16_t scor
 // -----------------------------------------------------------------------------------------
 // On entry the first fft_width/2 elements of state->work contain the FFT magnitudes
 static uint16_t prv_calc_steps_in_epoch(KAlgState *state, int16_t num_samples, int16_t fft_width,
-                                int16_t fft_width_log_2, uint32_t *pim_epoch, int16_t fft_scale) {
+                                int16_t fft_width_log_2, uint32_t *pim_epoch, int16_t fft_scale,
+                                int16_t epoch_z_mean) {
   // The Pebble's raw accel readings have 1000 = 1G. We divide each reading by 8 though, so
   // 125 = 1G. We have empirically determined that scaling the VMC by
   // KALG_x100_RAW_1G_PIM_CPM_TO_REAL_CPM / 100 produces values equivalent to the Actigraph values.
@@ -1115,6 +1243,11 @@ static uint16_t prv_calc_steps_in_epoch(KAlgState *state, int16_t num_samples, i
   bool partial_steps = false;
   bool stepping = prv_is_stepping(state, max_mag_hz, score_0, score_hf, score_lf, real_vmc_5s,
                                   total_energy, &partial_steps);
+
+  // ----------------------------------------
+  // Update the rolling cycling epoch classifier.
+  // score_0 is the peak step-band rhythmicity score: high when walking/running, low when cycling.
+  prv_cycling_epoch_update(state, real_vmc_5s, score_0, epoch_z_mean);
 
   // ----------------------------------------
   // Adjust for ending or starting a walk
@@ -1199,6 +1332,11 @@ static uint32_t prv_analyze_epoch(KAlgState *state) {
   // 5 sec proportional integral mode (pim), used by the steps calculation
   uint32_t pim_epoch[KALG_N_AXES] = {0};
 
+  // Capture the z-axis mean before the FFT in-place transform overwrites the sample array.
+  // This is used by the cycling epoch classifier to track wrist pitch stability.
+  int16_t epoch_z_mean = (int16_t)prv_mean(state->accel_samples[KALG_AXIS_Z],
+                                           state->num_samples, 1);
+
   // Calculate the axis metrics
   for (int16_t axis = 0; axis < KALG_N_AXES; axis++) {
     // add the local mean to the global mean array, additively
@@ -1249,10 +1387,10 @@ static uint32_t prv_analyze_epoch(KAlgState *state) {
                                          + state->accel_samples[2][i] * state->accel_samples[2][i]);
   }
 
-  // Calculate the step count for this epoch
+  // Calculate the step count for this epoch, also updates the cycling epoch classifier.
   uint16_t steps = prv_calc_steps_in_epoch(
       state, state->num_samples, KALG_FFT_WIDTH, KALG_FFT_WIDTH_PWR_TWO,
-      pim_epoch, KALG_FFT_SCALE);
+      pim_epoch, KALG_FFT_SCALE, epoch_z_mean);
 
   return steps;
 }
@@ -2102,7 +2240,12 @@ static void prv_cycling_activity_update(KAlgState *alg_state, KAlgStepActivitySt
   // below normal sustained walking cadence while still tolerating occasional wrist-triggered steps.
   const uint16_t k_max_steps = 25;
 
-  const bool is_active_minute = !definitely_not_worn && (vmc >= k_min_vmc) && (steps <= k_max_steps);
+  // Require both the per-minute heuristic (VMC, step count) AND the epoch-level classifier
+  // hysteresis to agree before treating a minute as an active cycling minute.
+  const bool is_active_minute = !definitely_not_worn
+      && (vmc >= k_min_vmc)
+      && (steps <= k_max_steps)
+      && alg_state->cycling_clf.cycling_detected;
   const bool activity_in_progress = is_active_minute && !shutting_down;
 
   if (activity_in_progress) {
@@ -2115,7 +2258,7 @@ static void prv_cycling_activity_update(KAlgState *alg_state, KAlgStepActivitySt
 
     const uint32_t duration_secs = utc_now - state->start_time;
     const uint32_t minute_distance_mm = activity_private_compute_cycling_distance_mm(
-        MS_PER_MINUTE, vmc, steps, 0 /* bpm */, duration_secs);
+        MS_PER_MINUTE, vmc, 0 /* hr_bpm; unknown at minute level */);
 
     state->steps += steps;
     state->resting_calories += resting_calories;
@@ -2224,4 +2367,10 @@ void kalg_get_sleep_stats(KAlgState *alg_state, KAlgOngoingSleepStats *stats) {
 void kalg_enable_activity_tracking(KAlgState *kalg_state, bool enable) {
   kalg_state->disable_activity_session_tracking = !enable;
   prv_reset_state(kalg_state);
+}
+
+// ---------------------------------------------------------------------------------------
+bool kalg_cycling_detected(KAlgState *state) {
+  PBL_ASSERTN(state != NULL);
+  return state->cycling_clf.cycling_detected;
 }

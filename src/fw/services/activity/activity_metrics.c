@@ -142,6 +142,11 @@ void activity_metrics_prv_get_metric_info(ActivityMetric metric, ActivityMetricI
       info->settings_key = ActivitySettingsKeyHeartRateZone3Minutes;
       info->has_history = false;
       break;
+    case ActivityMetricCycledDistanceMeters:
+      info->value_p = &state->step_data.cycling_distance_meters;
+      info->settings_key = ActivitySettingsKeyCycledDistanceMetersHistory;
+      info->has_history = true;
+      break;
     case ActivityMetricNumMetrics:
       WTF;
       break;

@@ -56,6 +56,7 @@ static HealthAggregation prv_default_aggregation(HealthMetric metric) {
     case HealthMetricSleepRestfulSeconds:
     case HealthMetricRestingKCalories:
     case HealthMetricActiveKCalories:
+    case HealthMetricCycledDistanceMeters:
       return HealthAggregationSum;
     case HealthMetricHeartRateBPM:
     case HealthMetricHeartRateRawBPM:
@@ -130,6 +131,8 @@ static ActivityMetric prv_get_activity_metric(HealthMetric metric) {
       return ActivityMetricRestingKCalories;
     case HealthMetricActiveKCalories:
       return ActivityMetricActiveKCalories;
+    case HealthMetricCycledDistanceMeters:
+      return ActivityMetricCycledDistanceMeters;
     case HealthMetricHeartRateBPM:
       return ActivityMetricHeartRateFilteredBPM;
     case HealthMetricHeartRateRawBPM:
@@ -154,6 +157,7 @@ static bool prv_metric_aggregation_implemented(HealthMetric metric, time_t time_
     case HealthMetricSleepRestfulSeconds:
     case HealthMetricRestingKCalories:
     case HealthMetricActiveKCalories:
+    case HealthMetricCycledDistanceMeters:
       // We can only use HealthAggregationSum with accumulating metrics and scope doesn't matter
       return (agg == HealthAggregationSum);
     case HealthMetricHeartRateRawBPM: {
